@@ -7,6 +7,7 @@ import {
     ActivityIndicator,
     Button,
     FlatList,
+    Platform,
     StyleSheet,
     Text,
     View,
@@ -30,6 +31,7 @@ const styles = StyleSheet.create({
     },
     pauseBtn: {
         marginRight: 20,
+        backgroundColor: "#05284e",
     },
     stopBtn: {
         backgroundColor: "#ef0d0d",
@@ -73,6 +75,9 @@ const styles = StyleSheet.create({
         fontSize: 20,
     },
 });
+
+const STP_BTN_COLOR = Platform.OS === "ios" ? "#fff" : "#ef0d0d";
+const PAUSE_BTN_COLOR = Platform.OS === "ios" ? "#fff" : "#05284e";
 
 export default function Transcription() {
     const params = useLocalSearchParams() as { meetingId?: string };
@@ -212,7 +217,7 @@ export default function Transcription() {
                         <View style={styles.pauseBtn}>
                             <Button
                                 title="Resume"
-                                color="#fff"
+                                color={PAUSE_BTN_COLOR}
                                 onPress={onResume}
                             />
                         </View>
@@ -220,14 +225,18 @@ export default function Transcription() {
                         <View style={styles.pauseBtn}>
                             <Button
                                 title="Pause"
-                                color="#fff"
+                                color={PAUSE_BTN_COLOR}
                                 onPress={onPause}
                             />
                         </View>
                     )}
 
                     <View style={styles.stopBtn}>
-                        <Button title="Stop" color="#fff" onPress={onStop} />
+                        <Button
+                            title="Stop"
+                            color={STP_BTN_COLOR}
+                            onPress={onStop}
+                        />
                     </View>
                 </View>
             ) : null}

@@ -3,7 +3,7 @@ import useMeetings from "@/hooks/useMeetings";
 import { useRecorderContext } from "@/recorder/RecordingProvider";
 import { Stack, useRouter } from "expo-router";
 import React, { useCallback } from "react";
-import { Button, StyleSheet, Text, View } from "react-native";
+import { Button, Platform, StyleSheet, Text, View } from "react-native";
 
 const styles = StyleSheet.create({
     container: {
@@ -14,7 +14,10 @@ const styles = StyleSheet.create({
     },
     btmBarContainer: {
         position: "absolute",
-        borderRadius: 25,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: "#05284e",
+        padding: 8,
         bottom: 50,
         width: 200,
         backgroundColor: "#05284e",
@@ -31,6 +34,8 @@ const styles = StyleSheet.create({
         fontSize: 24,
     },
 });
+
+const BTM_BTN_COLOR = Platform.OS === "ios" ? "#fff" : "#05284e";
 
 export default function History() {
     const router = useRouter();
@@ -98,13 +103,17 @@ export default function History() {
     const renderBottomBar = () => {
         return recorderState === "recording" ? (
             <View style={styles.btmBarContainer}>
-                <Button title="Stop" color="#fff" onPress={onStopPress} />
+                <Button
+                    title="Stop"
+                    color={BTM_BTN_COLOR}
+                    onPress={onStopPress}
+                />
             </View>
         ) : currentMeetingId ? (
             <View style={styles.btmBarContainer}>
                 <Button
                     title="Resume Notes"
-                    color="#fff"
+                    color={BTM_BTN_COLOR}
                     onPress={onResumePress}
                 />
             </View>
@@ -112,7 +121,7 @@ export default function History() {
             <View style={styles.btmBarContainer}>
                 <Button
                     title="Record New Notes"
-                    color="#fff"
+                    color={BTM_BTN_COLOR}
                     onPress={onRecordPress}
                 />
             </View>

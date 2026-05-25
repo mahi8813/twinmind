@@ -12,17 +12,14 @@ class DatabaseManager {
     private async initializeDBIfNeeded(): Promise<SQLiteDatabase> {
         if (!this.db) {
             this.db = await openDatabaseAsync("twinmind.db");
-            // Create meetings table if it doesn't exist
-            await this.db.execAsync(`
-        PRAGMA journal_mode = WAL;
-        CREATE TABLE IF NOT EXISTS meetings (meetingId TEXT PRIMARY KEY NOT NULL, date TEXT NOT NULL, startTime TEXT NOT NULL, endTime TEXT);
-        `);
-
-            // Create chunks table if it doesn't exist
-            await this.db.execAsync(`
-        PRAGMA journal_mode = WAL;
-        CREATE TABLE IF NOT EXISTS chunks (chunkId TEXT PRIMARY KEY NOT NULL, meetingId TEXT NOT NULL, uri TEXT NOT NULL, startTime TEXT NOT NULL, endTime TEXT NOT NULL, status TEXT NOT NULL, transcription TEXT);
-        `);
+            // Enable WAL journal mode and create tables if they don't exist.
+            await this.db.execAsync("PRAGMA journal_mode = WAL;");
+            await this.db.execAsync(
+                "CREATE TABLE IF NOT EXISTS meetings (meetingId TEXT PRIMARY KEY NOT NULL, date TEXT NOT NULL, startTime TEXT NOT NULL, endTime TEXT);",
+            );
+            await this.db.execAsync(
+                "CREATE TABLE IF NOT EXISTS chunks (chunkId TEXT PRIMARY KEY NOT NULL, meetingId TEXT NOT NULL, uri TEXT NOT NULL, startTime TEXT NOT NULL, endTime TEXT NOT NULL, status TEXT NOT NULL, transcription TEXT);",
+            );
         }
         return this.db;
     }
