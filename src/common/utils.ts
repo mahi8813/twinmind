@@ -10,13 +10,27 @@ export type ChunkHandler = (
 export const moveChunkFileToDocumentsDirectoryAsync = async (
     chunkUri: string,
 ): Promise<string> => {
-    const uniqueFileName = `recording-${Date.now()}.m4a`;
-    const customFilePath = `${FileSystem.documentDirectory}${uniqueFileName}`;
-    await FileSystem.moveAsync({
-        from: chunkUri,
-        to: customFilePath,
-    });
-    return customFilePath;
+    // 1. Get info and MD5 of the created file
+    let sourceInfo = await FileSystem.getInfoAsync(chunkUri, { md5: true });
+    if (!sourceInfo.exists) {
+        return "";
+    }
+
+    try {
+        const uniqueFileName = `recording-${Date.now()}_${Math.random()
+            .toString(36)
+            .slice(2, 10)}.m4a`;
+        const customFilePath = `${FileSystem.documentDirectory}${uniqueFileName}`;
+
+        await FileSystem.moveAsync({
+            from: chunkUri,
+            to: customFilePath,
+        });
+        return customFilePath;
+    } catch (error) {
+        console.error("Error moving file:", error);
+        throw error;
+    }
 };
 
 export const deleteChunkFileFromDocumentsDirectoryAsync = async (
@@ -31,7 +45,9 @@ export const buildChunk = (
     startTime: string,
     endTime: string,
 ): Chunk => ({
-    chunkId: `${meetingId}_Chunk_${startTime}`,
+    chunkId: `${meetingId}_Chunk_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2, 10)}`,
     meetingId,
     uri: chunkUri,
     startTime,

@@ -92,14 +92,16 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
 
             const chunkUri =
                 await moveChunkFileToDocumentsDirectoryAsync(fileUri);
-            const chunk: Chunk = buildChunk(
-                meetingId,
-                chunkUri,
-                startTime,
-                endTime,
-            );
-            await dbManager.saveChunk(chunk);
-            void transcriptionQueue.enqueueChunk(chunk);
+            if (chunkUri) {
+                const chunk: Chunk = buildChunk(
+                    meetingId,
+                    chunkUri,
+                    startTime,
+                    endTime,
+                );
+                await dbManager.saveChunk(chunk);
+                void transcriptionQueue.enqueueChunk(chunk);
+            }
         },
         [],
     );
@@ -153,7 +155,6 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         });
 
         await recorderA.prepareToRecordAsync();
-        await recorderB.prepareToRecordAsync();
 
         setRecordingState("recording");
         activeRecorderRef.current = "A";

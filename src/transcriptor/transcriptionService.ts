@@ -1,18 +1,15 @@
 import { Constants } from "../common/constants";
 
 export async function transcribeAudio(fileUri: string) {
-    const cleanUri = fileUri.replace("file://", "");
-
-    const formData = new FormData();
-    formData.append("file", {
-        uri: cleanUri,
-        name: "recording.m4a",
-        type: "audio/m4a",
-    } as any);
-
-    formData.append("model", "whisper-large-v3");
-
     try {
+        const formData = new FormData();
+        formData.append("file", {
+            uri: fileUri,
+            name: "recording.m4a",
+            type: "audio/m4a",
+        } as any);
+        formData.append("model", "whisper-large-v3");
+
         const response = await fetch(
             "https://api.groq.com/openai/v1/audio/transcriptions",
             {
