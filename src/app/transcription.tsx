@@ -1,7 +1,7 @@
-import { useRecorderContext } from "@/common/RecordingProvider";
-import { dbManager } from "@/common/dbManager";
 import { Chunk, Meeting } from "@/common/model";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { dbManager } from "@/database/dbManager";
+import { useRecorderContext } from "@/recorder/RecordingProvider";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
     ActivityIndicator,
@@ -81,22 +81,23 @@ export default function Transcription() {
         pauseMeeting,
         stopMeeting,
         currentMeetingId,
-        isRecording,
+        recorderState,
     } = useRecorderContext();
 
     let { meetingId = null } = params;
 
     const [meeting, setMeeting] = useState<Meeting | null>(null);
     const [chunks, setChunks] = useState<Chunk[] | null>(null);
+    const router = useRouter();
 
-    const shouldStartMeeting = !(meetingId || currentMeetingId || isRecording);
+    const isLiveMeeting = currentMeetingId && meetingId === currentMeetingId;
+    const isMeetingPaused = isLiveMeeting && recorderState === "paused";
 
-    const isLiveMeeting =
-        isRecording &&
-        currentMeetingId &&
-        (!meetingId || meetingId == currentMeetingId);
-
-    if (!meetingId) meetingId = currentMeetingId;
+    useEffect(() => {
+        if (!meetingId && currentMeetingId) {
+            router.setParams({ meetingId: currentMeetingId });
+        }
+    }, [meetingId, currentMeetingId, router]);
 
     const loadChunks = useCallback(async () => {
         if (!meetingId) return;
@@ -119,14 +120,14 @@ export default function Transcription() {
     }, [meetingId]);
 
     useEffect(() => {
-        if (shouldStartMeeting) {
+        if (!meetingId) {
             void startMeeting();
         }
     }, []);
 
     useEffect(() => {
         let interval: ReturnType<typeof setInterval> | null = null;
-        if (isRecording) {
+        if (recorderState === "recording") {
             void Promise.all([loadMeeting(), loadChunks()]);
             interval = setInterval(async () => {
                 loadChunks();
@@ -137,7 +138,7 @@ export default function Transcription() {
         return () => {
             if (interval) clearInterval(interval);
         };
-    }, [loadChunks, loadMeeting, isRecording]);
+    }, [loadChunks, loadMeeting, recorderState]);
 
     const onPause = useCallback(() => {
         void pauseMeeting();
@@ -146,6 +147,10 @@ export default function Transcription() {
     const onStop = useCallback(() => {
         void stopMeeting();
     }, [stopMeeting]);
+
+    const onResume = useCallback(() => {
+        void startMeeting();
+    }, []);
 
     return (
         <View style={styles.container}>
@@ -161,16 +166,23 @@ export default function Transcription() {
                         {meeting?.date ?? "Unknown date"}
                     </Text>
                     <Text style={styles.subtitle}>
-                        {meeting?.startTime} -{" "}
-                        {meeting?.endTime ?? "Live recording"}
+                        {meeting?.startTime} - {meeting?.endTime ?? "Live"}
                     </Text>
                     {isLiveMeeting ? (
-                        <View style={styles.liveBadgeContainer}>
-                            <Text style={styles.liveBadge}>
-                                I am listening and taking notes
-                            </Text>
-                            <ActivityIndicator size="large" />
-                        </View>
+                        isMeetingPaused ? (
+                            <View style={styles.liveBadgeContainer}>
+                                <Text style={styles.liveBadge}>
+                                    Paused. Click Resume to Continue
+                                </Text>
+                            </View>
+                        ) : (
+                            <View style={styles.liveBadgeContainer}>
+                                <Text style={styles.liveBadge}>
+                                    I am listening and taking notes
+                                </Text>
+                                <ActivityIndicator size="large" />
+                            </View>
+                        )
                     ) : null}
                 </View>
 
@@ -181,7 +193,8 @@ export default function Transcription() {
                         renderItem={({ item }) => (
                             <View style={styles.chunkCard}>
                                 <Text style={styles.chunkHeader}>
-                                    {item.startTime} - {item.endTime}
+                                    {item.startTime.slice(0, 8)} -{" "}
+                                    {item.endTime.slice(0, 8)}
                                 </Text>
                                 <Text style={styles.chunkText}>
                                     {item.transcription ?? "Transcribing..."}
@@ -195,9 +208,24 @@ export default function Transcription() {
             </>
             {isLiveMeeting ? (
                 <View style={styles.bottomBar}>
-                    <View style={styles.pauseBtn}>
-                        <Button title="Pause" color="#fff" onPress={onPause} />
-                    </View>
+                    {isMeetingPaused ? (
+                        <View style={styles.pauseBtn}>
+                            <Button
+                                title="Resume"
+                                color="#fff"
+                                onPress={onResume}
+                            />
+                        </View>
+                    ) : (
+                        <View style={styles.pauseBtn}>
+                            <Button
+                                title="Pause"
+                                color="#fff"
+                                onPress={onPause}
+                            />
+                        </View>
+                    )}
+
                     <View style={styles.stopBtn}>
                         <Button title="Stop" color="#fff" onPress={onStop} />
                     </View>

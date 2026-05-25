@@ -1,7 +1,7 @@
-import { dbManager } from "@/common/dbManager";
 import { Chunk } from "@/common/model";
-import { transcribeAudio } from "@/common/transcriptionUtil";
-import { deleteChunkFileFromDocumentsDirectoryAsync } from "@/hooks/useChunkRecorder";
+import { deleteChunkFileFromDocumentsDirectoryAsync } from "@/common/utils";
+import { dbManager } from "@/database/dbManager";
+import { transcribeAudio } from "@/transcriptor/transcriptionService";
 import * as BackgroundTask from "expo-background-task";
 import * as TaskManager from "expo-task-manager";
 
@@ -96,7 +96,12 @@ export class TranscriptionQueue {
         }
 
         this.processing = true;
-        await this.syncQueuedChunks();
+
+        // In a background task invocation, the in-memory queue may be empty.
+        // Sync from the database only when we have nothing queued locally.
+        if (this.queue.length === 0) {
+            await this.syncQueuedChunks();
+        }
 
         let didProcess = false;
         while (this.queue.length > 0) {
@@ -104,12 +109,13 @@ export class TranscriptionQueue {
 
             try {
                 const transcription = await transcribeAudio(chunk.uri);
-                await dbManager.updateChunkTranscription(
-                    chunk.chunkId,
-                    transcription,
-                );
+                if (typeof transcription === "string")
+                    await dbManager.updateChunkTranscription(
+                        chunk.chunkId,
+                        transcription,
+                    );
 
-                deleteChunkFileFromDocumentsDirectoryAsync(chunk.uri);
+                await deleteChunkFileFromDocumentsDirectoryAsync(chunk.uri);
 
                 didProcess = true;
             } catch (error) {

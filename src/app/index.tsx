@@ -1,6 +1,6 @@
-import { useRecorderContext } from "@/common/RecordingProvider";
 import NotesList from "@/components/notesList";
 import useMeetings from "@/hooks/useMeetings";
+import { useRecorderContext } from "@/recorder/RecordingProvider";
 import { Stack, useRouter } from "expo-router";
 import React, { useCallback } from "react";
 import { Button, StyleSheet, Text, View } from "react-native";
@@ -35,10 +35,21 @@ const styles = StyleSheet.create({
 export default function History() {
     const router = useRouter();
     const meetings = useMeetings();
-    const { pauseMeeting, stopMeeting, isRecording } = useRecorderContext();
+    const {
+        pauseMeeting,
+        stopMeeting,
+        recorderState,
+        currentMeetingId,
+        startMeeting,
+    } = useRecorderContext();
 
     // events
     const onRecordPress = useCallback(async () => {
+        router.push("/transcription");
+    }, [router]);
+
+    const onResumePress = useCallback(async () => {
+        startMeeting();
         router.push("/transcription");
     }, [router]);
 
@@ -65,7 +76,7 @@ export default function History() {
     const renderNotesList = () => {
         return (
             <>
-                {isRecording ? (
+                {recorderState === "recording" ? (
                     <View style={styles.toastContainer}>
                         <Text style={styles.toastTextView}>
                             I am Listening and taking Notes...
@@ -85,14 +96,22 @@ export default function History() {
     };
 
     const renderBottomBar = () => {
-        return isRecording ? (
+        return recorderState === "recording" ? (
             <View style={styles.btmBarContainer}>
                 <Button title="Stop" color="#fff" onPress={onStopPress} />
+            </View>
+        ) : currentMeetingId ? (
+            <View style={styles.btmBarContainer}>
+                <Button
+                    title="Resume Notes"
+                    color="#fff"
+                    onPress={onResumePress}
+                />
             </View>
         ) : (
             <View style={styles.btmBarContainer}>
                 <Button
-                    title="Record Notes"
+                    title="Record New Notes"
                     color="#fff"
                     onPress={onRecordPress}
                 />

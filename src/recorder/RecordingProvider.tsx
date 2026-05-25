@@ -1,10 +1,11 @@
 import { Constants } from "@/common/constants";
-import { dbManager } from "@/common/dbManager";
 import { Chunk, Meeting } from "@/common/model";
 import {
     buildChunk,
     moveChunkFileToDocumentsDirectoryAsync,
-} from "@/hooks/useChunkRecorder";
+} from "@/common/utils";
+import { dbManager } from "@/database/dbManager";
+import useLiveMeeting from "@/hooks/useLiveMeeting";
 import {
     AudioRecorder,
     getRecordingPermissionsAsync,
@@ -23,18 +24,19 @@ import React, {
     useState,
     type ReactNode,
 } from "react";
-import { transcriptionQueue } from "./transcriptionQueue";
+import { transcriptionQueue } from "../transcriptor/transcriptionQueue";
 
 const RECORDING_OPTIONS = Object.freeze({
     ...RecordingPresets.HIGH_QUALITY,
     numberOfChannels: 1,
 });
 
+type RecorderState = "recording" | "paused" | "stopped" | null;
 type RecorderContextValue = {
     startMeeting: () => Promise<void>;
     pauseMeeting: () => Promise<void>;
     stopMeeting: () => Promise<void>;
-    isRecording: boolean;
+    recorderState: RecorderState;
     currentMeetingId: string | null;
 };
 
@@ -48,13 +50,19 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     const activeRecorderRef = useRef<"A" | "B">("A");
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const startTimeTrackerRef = useRef<Record<string, string>>({});
-    const currentMeetingIdRef = useRef<string | null>(null);
-    const [isRecording, setIsRecording] = useState(false);
-    const isRecordingRef = useRef(false);
+    let currentMeetingIdRef = useRef<string | null>(null);
+    const [recorderState, setRecorderState] = useState<RecorderState>(null);
+    const { liveMeeting } = useLiveMeeting();
 
-    const setRecordingState = useCallback((value: boolean) => {
-        setIsRecording(value);
-        isRecordingRef.current = value;
+    useEffect(() => {
+        if (liveMeeting && liveMeeting.meetingId) {
+            currentMeetingIdRef.current = liveMeeting.meetingId;
+            setRecorderState("paused");
+        }
+    }, [liveMeeting]);
+
+    const setRecordingState = useCallback((value: RecorderState) => {
+        setRecorderState(value);
     }, []);
 
     const getActiveRecorder = useCallback(
@@ -76,7 +84,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
 
             await recorder.stop();
             const startTime = startTimeTrackerRef.current[recorder.id];
-            const endTime = new Date().toLocaleTimeString();
+            const endTime = new Date().toTimeString();
             const fileUri = recorder.uri;
             if (!fileUri) {
                 return;
@@ -108,12 +116,10 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         if (recorderB.isRecording) {
             await stopRecorderAndMoveFileAsync(recorderB);
         }
-
-        setRecordingState(false);
-    }, [recorderA, recorderB, stopRecorderAndMoveFileAsync, setRecordingState]);
+    }, [recorderA, recorderB, stopRecorderAndMoveFileAsync]);
 
     const startMeeting = useCallback(async () => {
-        if (isRecordingRef.current) {
+        if (recorderState == "recording") {
             return;
         }
 
@@ -149,10 +155,9 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         await recorderA.prepareToRecordAsync();
         await recorderB.prepareToRecordAsync();
 
-        setRecordingState(true);
+        setRecordingState("recording");
         activeRecorderRef.current = "A";
-        startTimeTrackerRef.current[recorderA.id] =
-            new Date().toLocaleTimeString();
+        startTimeTrackerRef.current[recorderA.id] = new Date().toTimeString();
         recorderA.record();
 
         intervalRef.current = setInterval(async () => {
@@ -161,7 +166,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
             const activeRecorder = getActiveRecorder();
             await activeRecorder.prepareToRecordAsync();
             startTimeTrackerRef.current[activeRecorder.id] =
-                new Date().toLocaleTimeString();
+                new Date().toTimeString();
             activeRecorder.record();
             setTimeout(async () => {
                 await stopRecorderAndMoveFileAsync(previousRecorder);
@@ -171,11 +176,10 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
 
     const pauseMeeting = useCallback(async () => {
         await cleanUp();
+        setRecordingState("paused");
     }, [cleanUp]);
 
     const stopMeeting = useCallback(async () => {
-        await cleanUp();
-
         if (currentMeetingIdRef.current) {
             await dbManager.updateMeetingEndTime(
                 currentMeetingIdRef.current,
@@ -183,6 +187,9 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
             );
             currentMeetingIdRef.current = null;
         }
+
+        await cleanUp();
+        setRecordingState("stopped");
     }, [cleanUp]);
 
     useEffect(() => {
@@ -199,14 +206,14 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
             startMeeting,
             pauseMeeting,
             stopMeeting,
-            isRecording,
+            recorderState,
             currentMeetingId: currentMeetingIdRef.current,
         }),
         [
             startMeeting,
             pauseMeeting,
             stopMeeting,
-            isRecording,
+            recorderState,
             currentMeetingIdRef.current,
         ],
     );

@@ -1,5 +1,5 @@
-import { Chunk } from "@/common/model";
 import * as FileSystem from "expo-file-system/legacy";
+import { Chunk } from "./model";
 
 export type ChunkHandler = (
     chunkUri: string,

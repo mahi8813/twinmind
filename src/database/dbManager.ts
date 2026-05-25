@@ -1,5 +1,5 @@
 import { openDatabaseAsync, SQLiteDatabase } from "expo-sqlite";
-import { Chunk, Chunks, Meeting, Meetings } from "./model";
+import { Chunk, Chunks, Meeting, Meetings } from "../common/model";
 
 class DatabaseManager {
     private static instance: DatabaseManager;

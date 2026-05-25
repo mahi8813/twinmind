@@ -1,11 +1,11 @@
-import { dbManager } from "@/common/dbManager";
 import { Meetings } from "@/common/model";
-import { useRecorderContext } from "@/common/RecordingProvider";
+import { dbManager } from "@/database/dbManager";
+import { useRecorderContext } from "@/recorder/RecordingProvider";
 import { useCallback, useEffect, useState } from "react";
 
 export default function useMeetings() {
     const [meetings, setMeetings] = useState<Meetings | null>(null);
-    const { isRecording } = useRecorderContext();
+    const { recorderState } = useRecorderContext();
 
     const fetchMeetings = useCallback(async () => {
         const meetings = await dbManager.getMeetings();
@@ -14,7 +14,7 @@ export default function useMeetings() {
 
     useEffect(() => {
         void fetchMeetings();
-    }, [isRecording, fetchMeetings]);
+    }, [recorderState, fetchMeetings]);
 
     return meetings;
 }

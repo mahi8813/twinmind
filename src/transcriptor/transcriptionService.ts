@@ -1,4 +1,4 @@
-import { Constants } from "./constants";
+import { Constants } from "../common/constants";
 
 export async function transcribeAudio(fileUri: string) {
     const cleanUri = fileUri.replace("file://", "");
