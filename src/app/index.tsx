@@ -1,98 +1,114 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
-
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
-  );
-}
+import { useRecorderContext } from "@/common/RecordingProvider";
+import NotesList from "@/components/notesList";
+import useMeetings from "@/hooks/useMeetings";
+import { Stack, useRouter } from "expo-router";
+import React, { useCallback } from "react";
+import { Button, StyleSheet, Text, View } from "react-native";
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
+    container: {
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#fff",
+    },
+    btmBarContainer: {
+        position: "absolute",
+        borderRadius: 25,
+        bottom: 50,
+        width: 200,
+        backgroundColor: "#05284e",
+    },
+    toastContainer: {
+        height: 50,
+        justifyContent: "center",
+        backgroundColor: "#b5b5b5",
+        alignSelf: "stretch",
+        alignItems: "center",
+    },
+    toastTextView: {
+        fontWeight: "bold",
+        fontSize: 24,
+    },
 });
+
+export default function History() {
+    const router = useRouter();
+    const meetings = useMeetings();
+    const { pauseMeeting, stopMeeting, isRecording } = useRecorderContext();
+
+    // events
+    const onRecordPress = useCallback(async () => {
+        router.push("/transcription");
+    }, [router]);
+
+    const onMeetingPress = useCallback(
+        (meetingId: string) => {
+            router.push(`/transcription?meetingId=${meetingId}` as any);
+        },
+        [router],
+    );
+
+    const onStopPress = useCallback(async () => {
+        await stopMeeting();
+    }, [stopMeeting]);
+
+    const renderNoMeetingsView = () => {
+        return (
+            <>
+                <Text>No Recorded Meetings</Text>
+                <Text>Click on Record Notes & start a new meeting"</Text>
+            </>
+        );
+    };
+
+    const renderNotesList = () => {
+        return (
+            <>
+                {isRecording ? (
+                    <View style={styles.toastContainer}>
+                        <Text style={styles.toastTextView}>
+                            I am Listening and taking Notes...
+                        </Text>
+                    </View>
+                ) : null}
+                <NotesList
+                    meetings={meetings ?? []}
+                    onMeetingPress={onMeetingPress}
+                />
+            </>
+        );
+    };
+
+    const renderLoadingView = () => {
+        return <Text>Loading your Meetings...</Text>;
+    };
+
+    const renderBottomBar = () => {
+        return isRecording ? (
+            <View style={styles.btmBarContainer}>
+                <Button title="Stop" color="#fff" onPress={onStopPress} />
+            </View>
+        ) : (
+            <View style={styles.btmBarContainer}>
+                <Button
+                    title="Record Notes"
+                    color="#fff"
+                    onPress={onRecordPress}
+                />
+            </View>
+        );
+    };
+
+    return (
+        <View style={styles.container}>
+            <Stack.Screen options={{ title: "History" }} />
+            {meetings
+                ? meetings.length > 0
+                    ? renderNotesList()
+                    : renderNoMeetingsView()
+                : renderLoadingView()}
+            {renderBottomBar()}
+        </View>
+    );
+}
