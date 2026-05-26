@@ -133,6 +133,7 @@ export default function Transcription() {
 
     useEffect(() => {
         let interval: ReturnType<typeof setInterval> | null = null;
+        let timer: number;
         if (recorderState === "recording") {
             void Promise.all([loadMeeting(), loadChunks()]);
             interval = setInterval(async () => {
@@ -140,8 +141,14 @@ export default function Transcription() {
             }, 5000);
         } else {
             void Promise.all([loadMeeting(), loadChunks()]);
+            // defer loading & get data one more
+            // to wait for transcription process
+            timer = setTimeout(() => {
+                void Promise.all([loadChunks()]);
+            }, 5000);
         }
         return () => {
+            if (timer) clearTimeout(timer);
             if (interval) clearInterval(interval);
         };
     }, [loadChunks, loadMeeting, recorderState]);
