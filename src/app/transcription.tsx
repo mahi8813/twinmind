@@ -1,10 +1,11 @@
 import { Chunk, Meeting } from "@/common/model";
+import ActiveRecordingIndicator from "@/components/activeRecordingIndicator";
+import PausedRecordingIndicator from "@/components/pausedRecordingIndicator";
 import { dbManager } from "@/database/dbManager";
 import { useRecorderContext } from "@/recorder/RecordingProvider";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
     Button,
     FlatList,
     Platform,
@@ -175,18 +176,9 @@ export default function Transcription() {
                     </Text>
                     {isLiveMeeting ? (
                         isMeetingPaused ? (
-                            <View style={styles.liveBadgeContainer}>
-                                <Text style={styles.liveBadge}>
-                                    Paused. Click Resume to Continue
-                                </Text>
-                            </View>
+                            <PausedRecordingIndicator />
                         ) : (
-                            <View style={styles.liveBadgeContainer}>
-                                <Text style={styles.liveBadge}>
-                                    I am listening and taking notes
-                                </Text>
-                                <ActivityIndicator size="large" />
-                            </View>
+                            <ActiveRecordingIndicator />
                         )
                     ) : null}
                 </View>

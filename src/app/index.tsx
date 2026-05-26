@@ -1,4 +1,6 @@
+import ActiveRecordingIndicator from "@/components/activeRecordingIndicator";
 import NotesList from "@/components/notesList";
+import PausedRecordingIndicator from "@/components/pausedRecordingIndicator";
 import useMeetings from "@/hooks/useMeetings";
 import { useRecorderContext } from "@/recorder/RecordingProvider";
 import { Stack, useRouter } from "expo-router";
@@ -82,12 +84,11 @@ export default function History() {
         return (
             <>
                 {recorderState === "recording" ? (
-                    <View style={styles.toastContainer}>
-                        <Text style={styles.toastTextView}>
-                            I am Listening and taking Notes...
-                        </Text>
-                    </View>
+                    <ActiveRecordingIndicator />
+                ) : recorderState === "paused" ? (
+                    <PausedRecordingIndicator />
                 ) : null}
+
                 <NotesList
                     meetings={meetings ?? []}
                     onMeetingPress={onMeetingPress}
