@@ -61,10 +61,6 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         }
     }, [liveMeeting]);
 
-    const setRecordingState = useCallback((value: RecorderState) => {
-        setRecorderState(value);
-    }, []);
-
     const getActiveRecorder = useCallback(
         () => (activeRecorderRef.current === "A" ? recorderA : recorderB),
         [recorderA, recorderB],
@@ -148,18 +144,18 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
             await dbManager.saveMeeting(meeting);
         }
 
-        await setAudioModeAsync({
-            playsInSilentMode: true,
-            allowsRecording: true,
-            allowsBackgroundRecording: true,
-        });
-
         await recorderA.prepareToRecordAsync();
 
-        setRecordingState("recording");
+        setRecorderState("recording");
         activeRecorderRef.current = "A";
         startTimeTrackerRef.current[recorderA.id] = new Date().toTimeString();
         recorderA.record();
+
+        //Always clear interval before staring a new one
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
 
         intervalRef.current = setInterval(async () => {
             const previousRecorder = getActiveRecorder();
@@ -177,7 +173,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
 
     const pauseMeeting = useCallback(async () => {
         await cleanUp();
-        setRecordingState("paused");
+        setRecorderState("paused");
     }, [cleanUp]);
 
     const stopMeeting = useCallback(async () => {
@@ -190,10 +186,18 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         }
 
         await cleanUp();
-        setRecordingState("stopped");
+        setRecorderState("stopped");
     }, [cleanUp]);
 
     useEffect(() => {
+        (async () => {
+            await setAudioModeAsync({
+                playsInSilentMode: true,
+                allowsRecording: true,
+                allowsBackgroundRecording: true,
+            });
+        })();
+
         return () => {
             if (intervalRef.current) {
                 clearInterval(intervalRef.current);
