@@ -25,6 +25,7 @@ import React, {
     useState,
     type ReactNode,
 } from "react";
+import BackgroundTimer, { TimeoutId } from "react-native-background-timer";
 
 const RECORDING_OPTIONS = Object.freeze({
     ...RecordingPresets.HIGH_QUALITY,
@@ -48,24 +49,23 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     const recorderA = useAudioRecorder(RECORDING_OPTIONS);
     const recorderB = useAudioRecorder(RECORDING_OPTIONS);
     const activeRecorderRef = useRef<"A" | "B">("A");
-    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const timeoutIdRef = useRef<TimeoutId | null>(null);
     const startTimeTrackerRef = useRef<Record<string, string>>({});
     let liveMeetingIdRef = useRef<string | null>(null);
     const [recorderState, setRecorderState] = useState<RecorderState>(null);
     const { liveMeeting } = useLiveMeeting();
 
     useEffect(() => {
-        setAudioModeAsync({
+        void setAudioModeAsync({
             playsInSilentMode: true,
             allowsRecording: true,
             allowsBackgroundRecording: true,
         });
 
         return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-            }
+            BackgroundTimer.stopBackgroundTimer();
+            timeoutIdRef.current &&
+                BackgroundTimer.clearTimeout(timeoutIdRef.current);
         };
     }, []);
 
@@ -132,13 +132,10 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
             }
 
             //always clear interval before staring a new one
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-            }
+            BackgroundTimer.stopBackgroundTimer();
 
             // create a new interval that toggle recorders on every
-            intervalRef.current = setInterval(async () => {
+            BackgroundTimer.runBackgroundTimer(async () => {
                 // make previous chunk recorder an active recorder
                 const prevRecorder = getActiveRecorder();
                 toggleActiveRecorder();
@@ -149,11 +146,18 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
                     currRecorder.record();
                     startTimeTrackerRef.current[currRecorder.id] =
                         new Date().toTimeString();
-                    setTimeout(async () => {
-                        if (prevRecorder.isRecording) {
-                            stopRecorderAndSaveChunk(prevRecorder);
-                        }
-                    }, Constants.CHUNK_OVERLAP_MS);
+                    timeoutIdRef.current = BackgroundTimer.setTimeout(
+                        async () => {
+                            if (prevRecorder.isRecording) {
+                                stopRecorderAndSaveChunk(prevRecorder);
+                            }
+                            timeoutIdRef.current &&
+                                BackgroundTimer.clearTimeout(
+                                    timeoutIdRef.current,
+                                );
+                        },
+                        Constants.CHUNK_OVERLAP_MS,
+                    );
                 }
             }, Constants.CHUNK_DURATION_MS - Constants.CHUNK_OVERLAP_MS);
         } catch (e) {
@@ -204,10 +208,9 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
 
     const cleanUp = () => {
         // cleanup timers
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-        }
+        BackgroundTimer.stopBackgroundTimer();
+        timeoutIdRef.current &&
+            BackgroundTimer.clearTimeout(timeoutIdRef.current);
 
         // stop recorders
         void stopRecorderAndSaveChunk(recorderA);
