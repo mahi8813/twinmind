@@ -10,12 +10,6 @@ export type ChunkHandler = (
 export const moveChunkFileToDocumentsDirectoryAsync = async (
     chunkUri: string,
 ): Promise<string> => {
-    // 1. Get info and MD5 of the created file
-    let sourceInfo = await FileSystem.getInfoAsync(chunkUri, { md5: true });
-    if (!sourceInfo.exists) {
-        return "";
-    }
-
     try {
         const uniqueFileName = `recording-${Date.now()}_${Math.random()
             .toString(36)
@@ -28,7 +22,7 @@ export const moveChunkFileToDocumentsDirectoryAsync = async (
         });
         return customFilePath;
     } catch (error) {
-        console.error("Error moving file:", error);
+        __DEV__ && console.error("Error moving file:", error);
         throw error;
     }
 };

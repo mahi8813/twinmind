@@ -44,7 +44,7 @@ export class TranscriptionQueue {
 
         this.running = true;
         await this.syncQueuedChunks();
-        await this.registerBackgroundTask();
+        // await this.registerBackgroundTask();
         this.scheduleWorker(0);
     }
 
@@ -56,7 +56,7 @@ export class TranscriptionQueue {
         }
     }
 
-    public async enqueueChunk(chunk: Chunk) {
+    public enqueueChunk(chunk: Chunk) {
         if (!this.queue.some((item) => item.chunkId === chunk.chunkId)) {
             this.queue.push(chunk);
         }

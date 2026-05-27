@@ -42,13 +42,7 @@ const BTM_BTN_COLOR = Platform.OS === "ios" ? "#fff" : "#05284e";
 export default function History() {
     const router = useRouter();
     const meetings = useMeetings();
-    const {
-        pauseMeeting,
-        stopMeeting,
-        recorderState,
-        currentMeetingId,
-        startMeeting,
-    } = useRecorderContext();
+    const { stopMeeting, recorderState, liveMeetingId } = useRecorderContext();
 
     // events
     const onRecordPress = useCallback(async () => {
@@ -56,8 +50,7 @@ export default function History() {
     }, [router]);
 
     const onResumePress = useCallback(async () => {
-        startMeeting();
-        router.push("/transcription");
+        router.push(`/transcription`);
     }, [router]);
 
     const onMeetingPress = useCallback(
@@ -110,7 +103,7 @@ export default function History() {
                     onPress={onStopPress}
                 />
             </View>
-        ) : currentMeetingId ? (
+        ) : liveMeetingId ? (
             <View style={styles.btmBarContainer}>
                 <Button
                     title="Resume Notes"
