@@ -6,6 +6,7 @@ import {
 } from "@/common/utils";
 import { dbManager } from "@/database/dbManager";
 import useLiveMeeting from "@/hooks/useLiveMeeting";
+import { transcriptionQueue } from "@/transcriptor/transcriptionQueue";
 import {
     AudioRecorder,
     getRecordingPermissionsAsync,
@@ -24,7 +25,6 @@ import React, {
     useState,
     type ReactNode,
 } from "react";
-import { transcriptionQueue } from "../transcriptor/transcriptionQueue";
 
 const RECORDING_OPTIONS = Object.freeze({
     ...RecordingPresets.HIGH_QUALITY,
@@ -37,7 +37,7 @@ type RecorderContextValue = {
     pauseMeeting: () => Promise<void>;
     stopMeeting: () => Promise<void>;
     recorderState: RecorderState;
-    currentMeetingId: string | null;
+    liveMeetingId: string | null;
 };
 
 const RecorderContext = createContext<RecorderContextValue | undefined>(
@@ -50,71 +50,44 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     const activeRecorderRef = useRef<"A" | "B">("A");
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const startTimeTrackerRef = useRef<Record<string, string>>({});
-    let currentMeetingIdRef = useRef<string | null>(null);
+    let liveMeetingIdRef = useRef<string | null>(null);
     const [recorderState, setRecorderState] = useState<RecorderState>(null);
     const { liveMeeting } = useLiveMeeting();
 
     useEffect(() => {
-        if (liveMeeting && liveMeeting.meetingId) {
-            currentMeetingIdRef.current = liveMeeting.meetingId;
-            setRecorderState("paused");
-        }
-    }, [liveMeeting]);
+        setAudioModeAsync({
+            playsInSilentMode: true,
+            allowsRecording: true,
+            allowsBackgroundRecording: true,
+        });
 
-    const getActiveRecorder = useCallback(
-        () => (activeRecorderRef.current === "A" ? recorderA : recorderB),
-        [recorderA, recorderB],
-    );
-
-    const toggleActiveRecorder = useCallback(() => {
-        activeRecorderRef.current =
-            activeRecorderRef.current === "A" ? "B" : "A";
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+        };
     }, []);
 
-    const stopRecorderAndMoveFileAsync = useCallback(
-        async (recorder: AudioRecorder) => {
-            const meetingId = currentMeetingIdRef.current;
-            if (!meetingId) {
-                return;
-            }
-
-            await recorder.stop();
-            const startTime = startTimeTrackerRef.current[recorder.id];
-            const endTime = new Date().toTimeString();
-            const fileUri = recorder.uri;
-            if (!fileUri) {
-                return;
-            }
-
-            const chunkUri =
-                await moveChunkFileToDocumentsDirectoryAsync(fileUri);
-            if (chunkUri) {
-                const chunk: Chunk = buildChunk(
-                    meetingId,
-                    chunkUri,
-                    startTime,
-                    endTime,
-                );
-                await dbManager.saveChunk(chunk);
-                void transcriptionQueue.enqueueChunk(chunk);
-            }
-        },
-        [],
-    );
-
-    const cleanUp = useCallback(async () => {
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
+    /*
+     *  this effect handles the app restart case
+     *  setting meetingId to previous app session's live meeting
+     *  and keep it in paused state
+     */
+    useEffect(() => {
+        if (liveMeeting?.meetingId) {
+            liveMeetingIdRef.current = liveMeeting.meetingId;
+            setRecorderState("paused");
         }
+    }, [liveMeeting?.meetingId]);
 
-        if (recorderA.isRecording) {
-            await stopRecorderAndMoveFileAsync(recorderA);
-        }
-        if (recorderB.isRecording) {
-            await stopRecorderAndMoveFileAsync(recorderB);
-        }
-    }, [recorderA, recorderB, stopRecorderAndMoveFileAsync]);
+    const getActiveRecorder = () =>
+        activeRecorderRef.current === "A" ? recorderA : recorderB;
+
+    const toggleActiveRecorder = () => {
+        activeRecorderRef.current =
+            activeRecorderRef.current === "A" ? "B" : "A";
+    };
 
     const startMeeting = useCallback(async () => {
         if (recorderState == "recording") {
@@ -132,78 +105,124 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        if (!currentMeetingIdRef.current) {
-            const dateObj = new Date();
-            currentMeetingIdRef.current = `Meeting_${dateObj.getTime()}`;
-            const meeting: Meeting = {
-                meetingId: currentMeetingIdRef.current,
-                date: dateObj.toDateString(),
-                startTime: dateObj.toLocaleTimeString(),
-                endTime: null,
-            };
-            await dbManager.saveMeeting(meeting);
+        try {
+            // creates a new meeting in database only if there is no life meeting
+            if (!liveMeetingIdRef.current) {
+                const dateObj = new Date();
+                liveMeetingIdRef.current = `Meeting_${dateObj.getTime()}`;
+                const meeting: Meeting = {
+                    meetingId: liveMeetingIdRef.current,
+                    date: dateObj.toDateString(),
+                    startTime: dateObj.toLocaleTimeString(),
+                    endTime: null,
+                };
+                await dbManager.saveMeeting(meeting);
+            }
+
+            // prepare and start recording
+            if (!recorderA.isRecording) {
+                await recorderA.prepareToRecordAsync();
+                recorderA.record();
+
+                // capture the current recording state
+                setRecorderState("recording");
+                activeRecorderRef.current = "A";
+                startTimeTrackerRef.current[recorderA.id] =
+                    new Date().toTimeString();
+            }
+
+            //always clear interval before staring a new one
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+
+            // create a new interval that toggle recorders on every
+            intervalRef.current = setInterval(async () => {
+                // make previous chunk recorder an active recorder
+                const prevRecorder = getActiveRecorder();
+                toggleActiveRecorder();
+                const currRecorder = getActiveRecorder();
+
+                if (!currRecorder.isRecording) {
+                    await currRecorder.prepareToRecordAsync();
+                    currRecorder.record();
+                    startTimeTrackerRef.current[currRecorder.id] =
+                        new Date().toTimeString();
+                    setTimeout(async () => {
+                        if (prevRecorder.isRecording) {
+                            stopRecorderAndSaveChunk(prevRecorder);
+                        }
+                    }, Constants.CHUNK_OVERLAP_MS);
+                }
+            }, Constants.CHUNK_DURATION_MS - Constants.CHUNK_OVERLAP_MS);
+        } catch (e) {
+            __DEV__ && console.log("error in startMeeting", e);
         }
+    }, []);
 
-        await recorderA.prepareToRecordAsync();
+    const stopRecorderAndSaveChunk = async (recorder: AudioRecorder) => {
+        try {
+            if (recorder.isRecording) {
+                recorder.stop();
+                const startTime = startTimeTrackerRef.current[recorder.id];
+                const endTime = new Date().toTimeString();
+                const fileUri = recorder.uri;
+                if (fileUri) {
+                    const chunkUri =
+                        await moveChunkFileToDocumentsDirectoryAsync(fileUri);
+                    if (chunkUri) {
+                        const meetingId = liveMeetingIdRef.current;
+                        if (meetingId) {
+                            const chunk: Chunk = buildChunk(
+                                meetingId,
+                                chunkUri,
+                                startTime,
+                                endTime,
+                            );
+                            await dbManager.saveChunk(chunk);
+                            transcriptionQueue.enqueueChunk(chunk);
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            __DEV__ && console.log("error in stopRecorderAndSaveChunk", e);
+        }
+    };
 
-        setRecorderState("recording");
-        activeRecorderRef.current = "A";
-        startTimeTrackerRef.current[recorderA.id] = new Date().toTimeString();
-        recorderA.record();
+    const updateEndTimeAndClearLiveMeeting = () => {
+        // update data base with end time before setting liveMeetingId to null
+        if (liveMeetingIdRef.current) {
+            void dbManager.updateMeetingEndTime(
+                liveMeetingIdRef.current,
+                new Date().toLocaleTimeString(),
+            );
+        }
+        liveMeetingIdRef.current = null;
+    };
 
-        //Always clear interval before staring a new one
+    const cleanUp = () => {
+        // cleanup timers
         if (intervalRef.current) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
         }
 
-        intervalRef.current = setInterval(async () => {
-            const previousRecorder = getActiveRecorder();
-            toggleActiveRecorder();
-            const activeRecorder = getActiveRecorder();
-            await activeRecorder.prepareToRecordAsync();
-            startTimeTrackerRef.current[activeRecorder.id] =
-                new Date().toTimeString();
-            activeRecorder.record();
-            setTimeout(async () => {
-                await stopRecorderAndMoveFileAsync(previousRecorder);
-            }, Constants.CHUNK_OVERLAP_MS);
-        }, Constants.CHUNK_DURATION_MS - Constants.CHUNK_OVERLAP_MS);
-    }, [getActiveRecorder, recorderA, recorderB, toggleActiveRecorder]);
+        // stop recorders
+        void stopRecorderAndSaveChunk(recorderA);
+        void stopRecorderAndSaveChunk(recorderB);
+    };
 
     const pauseMeeting = useCallback(async () => {
-        await cleanUp();
+        cleanUp();
         setRecorderState("paused");
-    }, [cleanUp]);
+    }, []);
 
     const stopMeeting = useCallback(async () => {
-        if (currentMeetingIdRef.current) {
-            await dbManager.updateMeetingEndTime(
-                currentMeetingIdRef.current,
-                new Date().toLocaleTimeString(),
-            );
-            currentMeetingIdRef.current = null;
-        }
-
-        await cleanUp();
+        cleanUp();
+        updateEndTimeAndClearLiveMeeting();
         setRecorderState("stopped");
-    }, [cleanUp]);
-
-    useEffect(() => {
-        (async () => {
-            await setAudioModeAsync({
-                playsInSilentMode: true,
-                allowsRecording: true,
-                allowsBackgroundRecording: true,
-            });
-        })();
-
-        return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-            }
-        };
     }, []);
 
     const value = useMemo(
@@ -212,14 +231,14 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
             pauseMeeting,
             stopMeeting,
             recorderState,
-            currentMeetingId: currentMeetingIdRef.current,
+            liveMeetingId: liveMeetingIdRef.current,
         }),
         [
             startMeeting,
             pauseMeeting,
             stopMeeting,
             recorderState,
-            currentMeetingIdRef.current,
+            liveMeetingIdRef.current,
         ],
     );
 

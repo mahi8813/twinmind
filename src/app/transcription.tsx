@@ -86,7 +86,7 @@ export default function Transcription() {
         startMeeting,
         pauseMeeting,
         stopMeeting,
-        currentMeetingId,
+        liveMeetingId,
         recorderState,
     } = useRecorderContext();
 
@@ -96,14 +96,14 @@ export default function Transcription() {
     const [chunks, setChunks] = useState<Chunk[] | null>(null);
     const router = useRouter();
 
-    const isLiveMeeting = currentMeetingId && meetingId === currentMeetingId;
+    const isLiveMeeting = liveMeetingId && meetingId === liveMeetingId;
     const isMeetingPaused = isLiveMeeting && recorderState === "paused";
 
     useEffect(() => {
-        if (!meetingId && currentMeetingId) {
-            router.setParams({ meetingId: currentMeetingId });
+        if (!meetingId && liveMeetingId) {
+            router.setParams({ meetingId: liveMeetingId });
         }
-    }, [meetingId, currentMeetingId, router]);
+    }, [meetingId, liveMeetingId, router]);
 
     const loadChunks = useCallback(async () => {
         if (!meetingId) return;
