@@ -10,8 +10,10 @@ class DatabaseManager {
     }
 
     private async initializeDBIfNeeded(): Promise<SQLiteDatabase> {
-        if (!this.db) {
-            this.db = await openDatabaseAsync("twinmind.db");
+        if (!this.db || !this.db.nativeDatabase) {
+            this.db = await openDatabaseAsync("twinmind.db", {
+                useNewConnection: true,
+            });
             // Enable WAL journal mode and create tables if they don't exist.
             await this.db.execAsync("PRAGMA journal_mode = WAL;");
             await this.db.execAsync(
